@@ -3,24 +3,15 @@ package tl.cordova.plugin.firebase.mlkit.barcode.scanner;
 // ----------------------------------------------------------------------------
 // |  Android Imports
 // ----------------------------------------------------------------------------
-import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
-
-import android.os.Parcelable;
-import android.view.View;
-import android.widget.CompoundButton;
-import android.widget.TextView;
 
 // ----------------------------------------------------------------------------
 // |  Cordova Imports
 // ----------------------------------------------------------------------------
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
-import org.apache.cordova.CordovaWebView;
-import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.PluginResult;
 
 // ----------------------------------------------------------------------------
@@ -29,11 +20,6 @@ import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import com.google.android.gms.common.api.CommonStatusCodes;
-
-// ----------------------------------------------------------------------------
-// |  Java Imports
-// ----------------------------------------------------------------------------
-import javax.security.auth.callback.Callback;
 
 // ----------------------------------------------------------------------------
 // |  Our Imports
@@ -53,25 +39,20 @@ public class AndroidScanner extends CordovaPlugin {
   // | Private Properties
   // ----------------------------------------------------------------------------
   private static final int RC_BARCODE_CAPTURE = 9001;
-  private Thread _ScanThread;
 
   // ----------------------------------------------------------------------------
   // |  Public Functions
   // ----------------------------------------------------------------------------
-  public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-    super.initialize(cordova, webView);
-  }
-
   @Override
   public boolean execute(String p_Action, JSONArray p_Args, CallbackContext p_CallbackContext) throws JSONException {
-    Context context = cordova.getActivity().getApplicationContext();
     CallbackContext = p_CallbackContext;
 
     if (p_Action.equals("startScan")) {
-      Thread thread = new Thread(new OneShotTask(context, p_Args));
-      thread.start();
-
-      _ScanThread = thread;
+      cordova.getActivity().runOnUiThread(new Runnable() {
+        public void run() {
+          openNewActivity(p_Args);
+        }
+      });
       return true;
     }
 
@@ -84,7 +65,6 @@ public class AndroidScanner extends CordovaPlugin {
 
     if (p_RequestCode == RC_BARCODE_CAPTURE) {
       if (p_ResultCode == CommonStatusCodes.SUCCESS) {
-        Intent d = new Intent();
         if (p_Data != null) {
           String barcode = p_Data.getStringExtra(BarcodeCaptureActivity.BarcodeValue);
           JSONArray result = new JSONArray();
@@ -96,18 +76,13 @@ public class AndroidScanner extends CordovaPlugin {
           Log.d("AndroidScanner", "Barcode read: " + barcode);
         }
       } else {
-        String err = p_Data != null ? p_Data.getParcelableExtra("err") : "No scan data received";
+        String err = p_Data != null ? p_Data.getStringExtra("err") : "No scan data received";
         JSONArray result = new JSONArray();
         result.put(err);
         result.put("");
         result.put("");
         CallbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, result));
       }
-    }
-
-    if (_ScanThread != null) {
-      _ScanThread.interrupt();
-      _ScanThread = null;
     }
   }
 
@@ -123,30 +98,13 @@ public class AndroidScanner extends CordovaPlugin {
   // ----------------------------------------------------------------------------
   // |  Private Functions
   // ----------------------------------------------------------------------------
-  private void openNewActivity(Context context, JSONArray args) {
-    Intent intent = new Intent(context, SecondaryActivity.class);
+  private void openNewActivity(JSONArray args) {
+    Intent intent = new Intent(cordova.getActivity(), SecondaryActivity.class);
     intent.putExtra("DetectionTypes", args.optInt(0, 1234));
     intent.putExtra("ViewFinderWidth", args.optDouble(1, .5));
-    intent.putExtra("ViewFinderHeight", args.optDouble(1, .7));
+    intent.putExtra("ViewFinderHeight", args.optDouble(2, .7));
 
     this.cordova.setActivityResultCallback(this);
     this.cordova.startActivityForResult(this, intent, RC_BARCODE_CAPTURE);
-  }
-
-  // ----------------------------------------------------------------------------
-  // |  Helper classes
-  // ----------------------------------------------------------------------------
-  private class OneShotTask implements Runnable {
-    private Context   _Context;
-    private JSONArray _Args   ;
-
-    private OneShotTask(Context p_Context, JSONArray p_TaskArgs) {
-      _Context = p_Context;
-      _Args = p_TaskArgs;
-    }
-
-    public void run() {
-      openNewActivity(_Context, _Args);
-    }
   }
 }

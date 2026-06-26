@@ -4,7 +4,8 @@
     <name>cordova-plugin-firebase-ml-kit-barcode-scanner</name>
     <description>Firebase ML Kit Barcode Scanner Plugin for Cordova</description>
     <license>MIT</license>
-    <keywords>cordova,plugin,barcode,scanner,firebase,mlkit</keywords>
+    <keywords>cordova,plugin,ecosystem:cordova,cordova-android,cordova-ios,barcode,scanner,firebase,mlkit</keywords>
+    <preference name="CAMERA_USAGE_DESCRIPTION" default="This app needs camera access to scan barcodes." />
     <js-module name="cordova-plugin-firebase-ml-kit-barcode-scanner" src="www/main.js">
         <clobbers target="cordova.plugins.scanner"/>
     </js-module>
@@ -15,12 +16,16 @@
         <engine name="cordova-ios" version=">=8.1.0"/>
     </engines>
     <platform name="ios">
+        <edit-config file="*-Info.plist" target="NSCameraUsageDescription" mode="merge">
+            <string>$CAMERA_USAGE_DESCRIPTION</string>
+        </edit-config>
         <config-file parent="/*" target="config.xml">
             <feature name="cordova-plugin-firebase-ml-kit-barcode-scanner">
                 <param name="ios-package" value="CDViOSScanner"/>
                 <param name="onload" value="true" />
             </feature>
         </config-file>
+        <resource-file src="src/ios/CDVFirebaseMLKitBarcodeScanner.bundle" target="CDVFirebaseMLKitBarcodeScanner.bundle" />
         <resource-file src="src/ios/GoogleService-Info.plist" />
         <framework src="Foundation.framework"/>
         <framework src="AVFoundation.framework"/>
