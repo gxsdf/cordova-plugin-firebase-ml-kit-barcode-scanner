@@ -83,6 +83,8 @@
   self.previewLayer.frame = self.view.layer.bounds;
   self.previewLayer.position = CGPointMake(CGRectGetMidX(self.previewLayer.frame),
                        CGRectGetMidY(self.previewLayer.frame));
+  
+  [self updateUIElementPositions];
 }
 
 - (void)viewDidUnload {
@@ -92,6 +94,12 @@
 
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
+
+  [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(deviceOrientationDidChange:)
+                                               name:UIDeviceOrientationDidChangeNotification
+                                             object:nil];
 
   // Set up camera.
   self.session = [[AVCaptureSession alloc] init];
@@ -107,6 +115,7 @@
 
   // Set up camera preview.
   [self setUpCameraPreview];
+  [self updatePreviewLayerOrientation];
 
   //Parse Cordova settings.
   NSNumber *formats = 0;
@@ -132,6 +141,42 @@
 - (void)viewDidDisappear:(BOOL)animated {
   [super viewDidDisappear:animated];
   [self.session stopRunning];
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                  name:UIDeviceOrientationDidChangeNotification
+                                                object:nil];
+  [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
+}
+
+- (void)deviceOrientationDidChange:(NSNotification *)notification {
+  [self updatePreviewLayerOrientation];
+}
+
+- (void)updatePreviewLayerOrientation {
+  UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+  AVCaptureVideoOrientation videoOrientation;
+  switch (deviceOrientation) {
+    case UIDeviceOrientationPortrait:
+      videoOrientation = AVCaptureVideoOrientationPortrait;
+      break;
+    case UIDeviceOrientationPortraitUpsideDown:
+      videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
+      break;
+    case UIDeviceOrientationLandscapeLeft:
+      // AVCapture landscape is opposite to UIDevice landscape
+      videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+      break;
+    case UIDeviceOrientationLandscapeRight:
+      videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+      break;
+    default:
+      return;
+  }
+  if (self.previewLayer.connection.isVideoOrientationSupported) {
+    self.previewLayer.connection.videoOrientation = videoOrientation;
+  }
+
+  // Also update UI element positions for the new orientation
+  [self updateUIElementPositions];
 }
 
 #pragma mark - imageOrientationFromDeviceOrientation
@@ -238,79 +283,74 @@ fromConnection:(AVCaptureConnection *)connection {
   CGFloat frameWidth = screenWidth*_scanAreaWidth;
   CGFloat frameHeight = screenHeight*_scanAreaHeight;
 
-  UILabel* verticalLine = [[UILabel alloc] init];
-
-  verticalLine.frame = CGRectMake(screenWidth/2, 5, 1, screenHeight-10);
-  verticalLine.layer.masksToBounds = NO;
-  verticalLine.layer.cornerRadius = 0;
-  verticalLine.userInteractionEnabled = YES;
-  verticalLine.layer.borderColor = [UIColor redColor].CGColor;
-  verticalLine.layer.borderWidth = 0.5;
-
-  UILabel* horizontalLine = [[UILabel alloc] init];
-
-  horizontalLine.frame = CGRectMake(5, screenHeight/2, screenWidth-10, 1);
-  horizontalLine.layer.masksToBounds = NO;
-  horizontalLine.layer.cornerRadius = 0;
-  horizontalLine.userInteractionEnabled = YES;
-  horizontalLine.layer.borderColor = [UIColor redColor].CGColor;
-  horizontalLine.layer.borderWidth = 0.5;
-
-
   UITapGestureRecognizer* tapScanner = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(focusAtPoint:)];
-  [verticalLine addGestureRecognizer:tapScanner];
-  [horizontalLine addGestureRecognizer:tapScanner];
+  
+  if (!self.verticalLine) {
+    self.verticalLine = [[UILabel alloc] init];
+    self.verticalLine.layer.masksToBounds = NO;
+    self.verticalLine.layer.cornerRadius = 0;
+    self.verticalLine.userInteractionEnabled = YES;
+    self.verticalLine.layer.borderColor = [UIColor redColor].CGColor;
+    self.verticalLine.layer.borderWidth = 0.5;
+    [self.verticalLine addGestureRecognizer:tapScanner];
+    [self.view addSubview:self.verticalLine];
+  }
 
-  CGFloat buttonSize = 45.0;
+  if (!self.horizontalLine) {
+    self.horizontalLine = [[UILabel alloc] init];
+    self.horizontalLine.layer.masksToBounds = NO;
+    self.horizontalLine.layer.cornerRadius = 0;
+    self.horizontalLine.userInteractionEnabled = YES;
+    self.horizontalLine.layer.borderColor = [UIColor redColor].CGColor;
+    self.horizontalLine.layer.borderWidth = 0.5;
+    [self.horizontalLine addGestureRecognizer:tapScanner];
+    [self.view addSubview:self.horizontalLine];
+  }
 
-
-  UIButton *_cancelButton = [[UIButton alloc] init];
-  [_cancelButton addTarget:self
-            action:@selector(closeView:)
-      forControlEvents:UIControlEventTouchUpInside];
+  if (!self.cancelButton) {
+    self.cancelButton = [[UIButton alloc] init];
+    [self.cancelButton addTarget:self
+              action:@selector(closeView:)
+        forControlEvents:UIControlEventTouchUpInside];
 
   NSString * cancelBase64String = @"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAQAAABpN6lAAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QAAKqNIzIAAAAJcEhZcwAADdcAAA3XAUIom3gAAAAHdElNRQfhCxMVEyaNvw4TAAADNElEQVR42u2dv1LqQBSHv1DwBjY0FjyAA7wCtna2ttrwLr6GY4PWKfQBJGNtb2PDMFQ2ewvmDheBC0l295zjYVO6Cb/vC4b82c0p+Lf1GDNkwAVfzKh4oyRguxWMGTFgyBnvVMwo+dzd8Y4F4cfyQl+aoFXr87LFtOCW4mfHc8qtjqtlyWS7u4lWMGG5h6rkfBN/vqfjapnSlaap3bpM/8s0Xyso9u799fJkTEGXp4NM5d9v9t3BrtYUHIMfCNwC9HYc+mwrOBY/sKAHN0d2tqLgePxA4Abua3TXr6AefuAeXmutoFtBXfzAKwd+AC0pqI8fmMNH7ZV0KmiCH/iAhwar6VPQDD/w0KFq9IFXPCpS0OWRq0ZrVnDZyJymb0HTvR8IXEKx43rJkoI2+C+rk+H+3msm/Qra4C/Xl/qTxhuRVdAGPzBZb6g4cOmoU0E7/OnmXY52G5NQED2xLQVJ0tpRkCypDQVJU+pXkDyhbgVZ0ulVkC2ZTgVZU+lTkD2RLgUiafQoEEuiQ4FoCnkF4glkA4jjy4ZQgS8XRA2+TBhV+PkDqcPPG0olfr5gavHzhFONnz6gevy0IU3gpwtqBj9NWFP48QObw48b2iR+vOBm8eOEN40fQ4Fx/PYKzONLKVCEL6FAGX5uBQrxcypQip9LgWL8HAqU46dWYAA/pQIj+KkUGMJPocAYfmwFBvFjKjCKH0uBYfwYCpLjd6QN/e7m/F/A+UHQ+c+g8xMh56fCzi+GnF8OO78h4vyWmPObos5vizt/MOL80Zjzh6POH487HyDhfIiM80FSzofJOR8o6XyorPPB0s6HyzufMOF8yozzSVPOp805nzjpfOqs88nTzqfPiwfw/v4I0RQ68MWS6MEXSaMLP3siffhZU+nEz5ZML36WdLrxkyfUj580pQ38ZEnt4CdJaws/emL3r9Z2/nJ156/Xd19gwXmJjQ6jhh/7zDXf0uwAfHPNc8N1R+7L7JwKLZ1KbTkvtla30pSeQ9+uVv9wWJ0KLp5Kbrovunoqu4v7wssrBa5Lb6+6uyy+vrlve4wZMuCCL2ZUvFESpBlatoIxIwYMOeOdihkln+s//wFFdoCM42fEswAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAxNy0xMS0xOVQyMToxOTozOCswMTowMPNH2M8AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMTctMTEtMTlUMjE6MTk6MzgrMDE6MDCCGmBzAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAABJRU5ErkJggg==";
 
   NSURL *cancelImageUrl = [NSURL URLWithString:cancelBase64String];
   NSData *cancelImageData = [NSData dataWithContentsOfURL:cancelImageUrl];
   UIImage *cancelIcon = [UIImage imageWithData:cancelImageData];
-  [_cancelButton setImage:cancelIcon
+  [self.cancelButton setImage:cancelIcon
            forState:UIControlStateNormal];
 
-  CGFloat screenOffset = (screenWidth/2 - frameWidth/2)/2 - buttonSize/2;
-  NSLog(@"screenOffset %f", screenOffset);
+    self.cancelButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.4];
+    self.cancelButton.transform = CGAffineTransformMakeRotation(M_PI / 2);
+    self.cancelButton.layer.cornerRadius = 22.5;
+    self.cancelButton.contentEdgeInsets = UIEdgeInsetsMake(15, 15, 15, 15);
 
-  _cancelButton.frame = CGRectMake(screenOffset, screenHeight-screenOffset-buttonSize, buttonSize, buttonSize);
-  _cancelButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.4];
-  _cancelButton.transform=CGAffineTransformMakeRotation(M_PI / 2);
-  _cancelButton.layer.cornerRadius = buttonSize/2;
-  _cancelButton.contentEdgeInsets = UIEdgeInsetsMake(15, 15, 15, 15);
+    [self.view addSubview:self.cancelButton];
+  }
 
-  [self.view addSubview:_cancelButton];
-
-  self.torchButton = [[UIButton alloc] init];
-  [self.torchButton addTarget:self
-             action:@selector(toggleFlashlight:)
-         forControlEvents:UIControlEventTouchUpInside];
+  if (!self.torchButton) {
+    self.torchButton = [[UIButton alloc] init];
+    [self.torchButton addTarget:self
+               action:@selector(toggleFlashlight:)
+       forControlEvents:UIControlEventTouchUpInside];
 
   NSString * torchBase64String = @"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAQAAABpN6lAAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QAAKqNIzIAAAAJcEhZcwAADdcAAA3XAUIom3gAAAAHdElNRQfhCxMVAzOqoPipAAADM0lEQVR42u2dv2sTcRyG38RWzGYHhxYHp+B+Lk7iIlhFXZvdPeAouOuS1X/AVCiiCBU6OjgIOffG+gvEgCIqlsQi9JxEbC/XJt8fz136eTJecve+T+6Su8t9czX5oqmWEiVa9DbHfAZKlaqrfuDlTERNbQ2VRXwM1VaNrv2v/nrU8n8f62VR0EbqZ8rUpqtLUjPyyv//htB0jV93FrCiBia/oRYv4BxWX5IS1xm4f4x8Cv7FV8RAS7SADKzvoYH7JlBxTAAdgMYE0AFoTAAdwDAMwzAMo7q8ws4IZsr0wjW++57gFqrfeenuAt6YAJLXvADbBFABJVgDPmobrP+DF5BpAxPwyH0WPk6IPKmyAB8/MJ/UZ80D9T/ojPtMfKwB3/UcqO/l/fd1TvAxIuAhstRclrQT/ShgzU/0Y17m8lMLOh9V+UjX3L8CfbKgr1Hf/zt04f3EvFLorU7QdfdzXFuR6v/SRbpsPjci1b9MFx3P7eD1d3SFLlnM3cD1r9IFD+Z+wJW/AvWluh4EqT/UJbraYZnTmvf627pA12IV3KQrTa7gqcf6z+g603BKXzzV/+Z6NSjFiicB9+gi07PhRcBZusb0XPdQ3/nXP5J5D58Dt8JGDHuZ3G8Pp60C//AS+jrBl85zeBc24FxgAe/HTulrVT2lkhIlao0d/RNYQGhO527Xu+rsGWnUUEe7uc+tOPXc+su5z13OVVB59lfqjH1u5ygI2CwYZtfQZmwB8a8WX9Vo7LSRurHjxBfQK5yaRs8TnL2rdPEow8XZ3wRKRnwBicPUmRBQPNY4uoDwlPxrML6AI78jZLvC5ToYCv83JOMqHPZwOHBCTkBJEtqOEB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgTQAWhMAB2AxgQEX8IAfHUpBLgNhg0+lDa8gJ7Tq2dgLLHLbXk93Fa3DEz/d6ttOrofpr01d2lure1DwaQ3Z492c/V4jptqKVFy4F2KB0qVqqt+nFh/ADjJgLiaxweIAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE3LTExLTE5VDIxOjAzOjUxKzAxOjAwdhzbkgAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxNy0xMS0xOVQyMTowMzo1MSswMTowMAdBYy4AAAAZdEVYdFNvZnR3YXJlAHd3dy5pbmtzY2FwZS5vcmeb7jwaAAAAAElFTkSuQmCCconv";
 
   NSURL *torchImageUrl = [NSURL URLWithString:torchBase64String];
   NSData *torchImageData = [NSData dataWithContentsOfURL:torchImageUrl];
   UIImage *torchIcon = [UIImage imageWithData:torchImageData];
-  [self.torchButton setImage:torchIcon
-            forState:UIControlStateNormal];
+    [self.torchButton setImage:torchIcon forState:UIControlStateNormal];
 
-  self.torchButton.frame = CGRectMake(screenWidth-screenOffset-buttonSize, screenHeight-screenOffset-buttonSize, buttonSize, buttonSize);
-  self.torchButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.4];
-  self.torchButton.transform=CGAffineTransformMakeRotation(M_PI / 2);
-  self.torchButton.layer.cornerRadius = buttonSize/2;
-  self.torchButton.contentEdgeInsets = UIEdgeInsetsMake(10, 10, 10, 10);
+    self.torchButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.4];
+    self.torchButton.transform = CGAffineTransformMakeRotation(M_PI / 2);
+    self.torchButton.layer.cornerRadius = 22.5;
+    self.torchButton.contentEdgeInsets = UIEdgeInsetsMake(10, 10, 10, 10);
+    [self.view addSubview:self.torchButton];
+  }
 
-  [self.view addSubview:self.torchButton];
-
-  [self.view addSubview:verticalLine];
-  [self.view addSubview:horizontalLine];
+  // Update positions based on current orientation
+  [self updateUIElementPositions];
 
   self.imageView = [[UIImageView alloc] initWithImage:nil];
 
@@ -324,6 +364,24 @@ fromConnection:(AVCaptureConnection *)connection {
 
   [self.view addSubview:catView];
 
+}
+
+- (void)updateUIElementPositions {
+  CGRect screenRect = [[UIScreen mainScreen] bounds];
+  CGFloat screenWidth = screenRect.size.width;
+  CGFloat screenHeight = screenRect.size.height;
+  CGFloat buttonSize = 45.0;
+
+  CGFloat frameWidth = screenWidth * _scanAreaWidth;
+  CGFloat screenOffset = (screenWidth/2 - frameWidth/2)/2 - buttonSize/2;
+
+  // Update red crosshair lines
+  self.verticalLine.frame = CGRectMake(screenWidth/2, 5, 1, screenHeight-10);
+  self.horizontalLine.frame = CGRectMake(5, screenHeight/2, screenWidth-10, 1);
+
+  // Update button positions
+  self.cancelButton.frame = CGRectMake(screenOffset, screenHeight-screenOffset-buttonSize, buttonSize, buttonSize);
+  self.torchButton.frame = CGRectMake(screenWidth-screenOffset-buttonSize, screenHeight-screenOffset-buttonSize, buttonSize, buttonSize);
 }
 
 #pragma mark - Helper Functions

@@ -13,6 +13,9 @@
 @property(nonatomic,assign) NSNumber *barcodeFormats;
 @property(nonatomic,assign) CGFloat scanAreaWidth;
 @property(nonatomic,assign) CGFloat scanAreaHeight;
+@property(nonatomic, strong) UIButton *cancelButton;
+@property(nonatomic, strong) UILabel *verticalLine;
+@property(nonatomic, strong) UILabel *horizontalLine;
 
 @end
 
