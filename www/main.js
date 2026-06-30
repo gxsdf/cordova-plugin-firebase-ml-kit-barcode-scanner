@@ -79,8 +79,42 @@ function startScanning(p_OnSuccess, p_OnError, p_Settings) {
     p_Settings.detectorSize.height
   ];
 
+  var handleNativeLog = function(p_Payload) {
+    if (!p_Payload || p_Payload.__type !== 'log') {
+      return false;
+    }
+
+    var prefix = '[cordova-plugin-firebase-ml-kit-barcode-scanner][' + (p_Payload.source || 'native') + '] ';
+    var message = prefix + (p_Payload.message || '');
+
+    if (p_Payload.level === 'error' && console.error) {
+      console.error(message);
+    } else if (p_Payload.level === 'warn' && console.warn) {
+      console.warn(message);
+    } else {
+      console.log(message);
+    }
+
+    return true;
+  };
+
   
   exec(p_Result => {
-    p_OnSuccess(p_Result[0]);
-  }, p_OnError, 'cordova-plugin-firebase-ml-kit-barcode-scanner','startScan',settingArray);
+    if (handleNativeLog(p_Result)) {
+      return;
+    }
+
+    if (Array.isArray(p_Result)) {
+      p_OnSuccess(p_Result[0]);
+      return;
+    }
+
+    p_OnSuccess(p_Result);
+  }, p_Error => {
+    if (handleNativeLog(p_Error)) {
+      return;
+    }
+
+    p_OnError(p_Error);
+  }, 'cordova-plugin-firebase-ml-kit-barcode-scanner','startScan',settingArray);
 };

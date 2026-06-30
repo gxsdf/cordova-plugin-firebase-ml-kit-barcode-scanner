@@ -7,12 +7,15 @@ import android.Manifest;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.hardware.Camera;
+import android.graphics.Color;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.ViewGroup;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import androidx.annotation.RequiresPermission;
 
@@ -61,11 +64,11 @@ public class CameraSourcePreview extends ViewGroup {
     addView(_SurfaceView);
 
     _HorizontalLine = new View(_Context);
-    _HorizontalLine.setBackgroundResource(getResources().getIdentifier("horizontal_line", "drawable", _Context.getPackageName()));
+    _HorizontalLine.setBackgroundColor(Color.argb(170, 255, 0, 0));
     addView(_HorizontalLine);
 
     _VerticalLine = new View(_Context);
-    _VerticalLine.setBackgroundResource(getResources().getIdentifier("vertical_line", "drawable", _Context.getPackageName()));
+    _VerticalLine.setBackgroundColor(Color.argb(170, 255, 0, 0));
     addView(_VerticalLine);
 
     _TorchButton = new Button(_Context);
@@ -179,36 +182,59 @@ public class CameraSourcePreview extends ViewGroup {
     final int layoutWidth = p_Right - p_Left;
     final int layoutHeight = p_Bottom - p_Top;
 
-    int childHeight = layoutHeight;
-    int childWidth = (int) (((float) layoutHeight / (float) height) * width);
-    int leftOffset = ((int) ((float) layoutHeight / (float) height) * width - childWidth) / 2;
-    int topOffset = 0;
+    int childWidth;
+    int childHeight;
+    int leftOffset;
+    int topOffset;
 
-    if (childHeight > layoutHeight) {
+    float previewAspectRatio = (float) width / (float) height;
+    float layoutAspectRatio = (float) layoutWidth / (float) layoutHeight;
+
+    if (previewAspectRatio > layoutAspectRatio) {
+      // Preview is relatively wider than container: fit height and center-crop width.
+      childHeight = layoutHeight;
+      childWidth = Math.round(layoutHeight * previewAspectRatio);
+      leftOffset = (layoutWidth - childWidth) / 2;
+      topOffset = 0;
+    } else {
+      // Preview is relatively taller than container: fit width and center-crop height.
       childWidth = layoutWidth;
-      childHeight = (int) (((float) layoutWidth / (float) width) * height);
-
+      childHeight = Math.round(layoutWidth / previewAspectRatio);
       leftOffset = 0;
-      topOffset = ((int) ((float) layoutWidth / (float) width) * height - childHeight) / 2;
+      topOffset = (layoutHeight - childHeight) / 2;
     }
 
-    _SurfaceView.layout(leftOffset, topOffset, childWidth, childHeight);
+    _SurfaceView.layout(leftOffset, topOffset, leftOffset + childWidth, topOffset + childHeight);
 
-    int actualWidth = (int) (layoutWidth * ViewFinderWidth);
-    int actualHeight = (int) (layoutHeight * ViewFinderHeight);
+    int lineThickness = Math.max(2, dpToPx(2));
 
-    _HorizontalLine.layout(10, 10, layoutWidth-10, layoutHeight-10);
+    int horizontalTop = (layoutHeight / 2) - (lineThickness / 2);
+    _HorizontalLine.layout(0, horizontalTop, layoutWidth, horizontalTop + lineThickness);
 
-    
-    int xOffset = (layoutHeight - layoutWidth) * -1;
-
-    _VerticalLine.layout(xOffset, 10, layoutHeight, layoutHeight-10);
+    int verticalLeft = (layoutWidth / 2) - (lineThickness / 2);
+    _VerticalLine.layout(verticalLeft, 0, verticalLeft + lineThickness, layoutHeight);
 
     int buttonSize = dpToPx(45);
-    int torchLeft = (int) layoutWidth / 2 + actualWidth / 2 + (layoutWidth - (layoutWidth / 2 + actualWidth / 2)) / 2 - buttonSize / 2;
-    int torchTop = layoutHeight - (layoutWidth - torchLeft);
+    int torchRightMargin = dpToPx(16);
+    int torchBottomMargin = dpToPx(16);
+
+    int insetRight = 0;
+    int insetBottom = 0;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      WindowInsets windowInsets = getRootWindowInsets();
+      if (windowInsets != null) {
+        insetRight = windowInsets.getStableInsetRight();
+        insetBottom = windowInsets.getStableInsetBottom();
+      }
+    }
+
+    int torchLeft = layoutWidth - buttonSize - torchRightMargin - insetRight;
+    int torchTop = layoutHeight - buttonSize - torchBottomMargin - insetBottom;
+    torchLeft = Math.max(0, torchLeft);
+    torchTop = Math.max(0, torchTop);
 
     _TorchButton.layout(torchLeft, torchTop, torchLeft + buttonSize, torchTop + buttonSize);
+    _TorchButton.bringToFront();
 
     try {
       startIfReady();
